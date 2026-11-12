@@ -8,10 +8,16 @@ The formula downloads Ark directly from the [official download page](https://www
 
 ## Install
 
+Requires [Homebrew](https://brew.sh) on macOS or Linux (x86_64).
+
 ```sh
 brew tap tsukinoko-kun/ark-vcs https://github.com/tsukinoko-kun/ark-vcs
 brew install ark-vcs
 ```
+
+Run `ark` to open the client, or `ark help` for the CLI.
+
+Update with `brew upgrade ark-vcs`, uninstall with `brew uninstall ark-vcs`.
 
 ## License
 
