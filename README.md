@@ -4,14 +4,25 @@
 > This is an **unofficial** tap. It is not affiliated with or endorsed by the Ark VCS developers.
 > Ark VCS is made by STARY DONKEY UNIPESSOAL LDA. Visit the official website: https://www.ark-vcs.com
 
-The formula downloads Ark directly from the [official download page](https://www.ark-vcs.com/download.html) and is checked daily for new versions.
+Ark is downloaded directly from the [official download page](https://www.ark-vcs.com/download.html) and is checked daily for new versions.
 
 ## Install
 
-Requires [Homebrew](https://brew.sh) on macOS or Linux (x86_64).
+Requires [Homebrew](https://brew.sh).
 
 ```sh
 brew tap tsukinoko-kun/ark-vcs https://github.com/tsukinoko-kun/ark-vcs
+```
+
+macOS (installs `Ark-Vcs.app` to `/Applications` and `ark` to your PATH):
+
+```sh
+brew install --cask ark-vcs
+```
+
+Linux (x86_64):
+
+```sh
 brew install ark-vcs
 ```
 
