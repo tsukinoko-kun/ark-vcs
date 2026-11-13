@@ -8,25 +8,131 @@ on:
 permissions:
   contents: write
   actions: write
+  packages: write
+
+env:
+  IMAGE: ghcr.io/tsukinoko-kun/ark-vcs
 
 jobs:
-  update:
-    runs-on: ubuntu-latest
+  resolve:
+    name: Resolve latest version
+    runs-on: ubuntu-24.04
+    outputs:
+      version: ${{ steps.ark.outputs.version }}
+      homebrew: ${{ steps.ark.outputs.homebrew }}
+      mac_sha: ${{ steps.ark.outputs.mac_sha }}
+      linux_sha: ${{ steps.ark.outputs.linux_sha }}
+      image: ${{ steps.image.outputs.state }}
     steps:
-      - uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v7
 
-      - run: ./update.sh
+      - name: Resolve Ark version and Homebrew state
+        id: ark
+        run: ./resolve.sh >>"$GITHUB_OUTPUT"
 
-      - name: Commit new version
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Check whether the image is published
+        id: image
+        env:
+          VERSION: ${{ steps.ark.outputs.version }}
         run: |
-          git diff --quiet && exit 0
-          version="$(grep -oE '^  version "[^"]+"' Formula/ark-vcs.rb | cut -d'"' -f2)"
-          git config user.name "github-actions[bot]"
-          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git commit -am "ark-vcs $version"
-          git push
+          if output="$(docker buildx imagetools inspect "$IMAGE:$VERSION" 2>&1)"; then
+            echo "state=published" >>"$GITHUB_OUTPUT"
+          elif [[ "$output" == *": not found" ]]; then
+            echo "state=missing" >>"$GITHUB_OUTPUT"
+          else
+            echo "$output" >&2
+            exit 1
+          fi
 
       - name: Keep scheduled workflow from being disabled after 60 days of inactivity
         run: gh workflow enable update.yml
         env:
           GH_TOKEN: ${{ github.token }}
+
+  homebrew:
+    name: Update Homebrew formula and cask
+    needs: resolve
+    if: needs.resolve.outputs.homebrew == 'outdated'
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Write formula and cask
+        run: ./homebrew.sh "$VERSION" "$MAC_SHA" "$LINUX_SHA"
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+          MAC_SHA: ${{ needs.resolve.outputs.mac_sha }}
+          LINUX_SHA: ${{ needs.resolve.outputs.linux_sha }}
+
+      - name: Commit and push
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git commit -am "ark-vcs $VERSION"
+          git push
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}
+
+  docker:
+    name: Build Docker image (${{ matrix.os }})
+    needs: resolve
+    if: needs.resolve.outputs.image == 'missing'
+    strategy:
+      matrix:
+        include:
+          - os: linux
+            runner: ubuntu-24.04
+          - os: windows
+            runner: windows-2025
+    runs-on: ${{ matrix.runner }}
+    defaults:
+      run:
+        shell: bash
+    env:
+      VERSION: ${{ needs.resolve.outputs.version }}
+      TAG: ${{ needs.resolve.outputs.version }}-${{ matrix.os }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build image
+        run: docker build --build-arg VERSION="$VERSION" -f "docker/${{ matrix.os }}.Dockerfile" -t "$IMAGE:$TAG" docker
+
+      - name: Check that Ark runs in the image
+        run: docker run --rm "$IMAGE:$TAG" help
+
+      - name: Push image
+        run: docker push "$IMAGE:$TAG"
+
+  manifest:
+    name: Publish multi-OS image
+    needs: [resolve, docker]
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Log in to GitHub Container Registry
+        uses: docker/login-action@v4
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Combine Linux and Windows images into one tag
+        run: docker buildx imagetools create -t "$IMAGE:$VERSION" -t "$IMAGE:latest" "$IMAGE:$VERSION-linux" "$IMAGE:$VERSION-windows"
+        env:
+          VERSION: ${{ needs.resolve.outputs.version }}

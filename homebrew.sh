@@ -1,33 +1,18 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
+if [[ $# -ne 3 ]]; then
+  echo "usage: $0 <version> <mac_sha256> <linux_sha256>" >&2
+  exit 1
+fi
+version="$1"
+mac_sha="$2"
+linux_sha="$3"
+
 base_url="https://www.ark-vcs.com"
 formula="Formula/ark-vcs.rb"
 cask="Casks/ark-vcs.rb"
-
-page="$(curl -fsSL "$base_url/download.html")"
-
-version="$(grep -m1 -oE '<div class="download-version">[0-9]+(\.[0-9]+)+' <<<"$page" | grep -oE '[0-9]+(\.[0-9]+)+$' || true)"
-if [[ -z "$version" ]]; then
-  echo "error: could not find version in $base_url/download.html" >&2
-  exit 1
-fi
-
-current="$(grep -hoE '^  version "[^"]+"' "$formula" "$cask" | cut -d'"' -f2 | sort -u)"
-if [[ "$version" == "$current" ]]; then
-  echo "ark-vcs $version is up to date"
-  exit 0
-fi
-
-file_version="${version//./_}"
-mac_url="$base_url/static/versions/Ark-Vcs_${file_version}_mac.zip"
-linux_url="$base_url/static/versions/Ark-Vcs_${file_version}_linux.zip"
-
-sha256_of() {
-  curl -fsSL "$1" | shasum -a 256 | cut -d' ' -f1
-}
-mac_sha="$(sha256_of "$mac_url")"
-linux_sha="$(sha256_of "$linux_url")"
+linux_url="$base_url/static/versions/Ark-Vcs_${version//./_}_linux.zip"
 
 cat >"$formula" <<EOF
 class ArkVcs < Formula
