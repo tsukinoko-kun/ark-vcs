@@ -12,7 +12,7 @@ if [[ -z "$version" ]]; then
 fi
 echo "version=$version"
 
-current="$(grep -hoE '^  version "[^"]+"' Formula/ark-vcs.rb Casks/ark-vcs.rb | cut -d'"' -f2 | sort -u)"
+current="$(grep -hoE '^  version "[^"]+"' Formula/ark-vcs.rb Formula/ark-vcs-server.rb Casks/ark-vcs.rb | cut -d'"' -f2 | sort -u)"
 if [[ "$version" == "$current" ]]; then
   echo "homebrew=current"
   exit 0
